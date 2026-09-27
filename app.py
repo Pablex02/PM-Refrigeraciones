@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import os
+import requests
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -16,7 +17,10 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Conexión a Google Sheets
+# URL base de tu Formulario de Google para el envío de datos
+FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdi8Q4kN-_qOqTfKQNRS8N4sq8W81jHogcw70To00ub9Uy5ig/formResponse"
+
+# Conexión a Google Sheets para LECTURA
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Función para cargar datos de Google Sheets
@@ -32,14 +36,28 @@ def cargar_datos():
             "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
         ])
 
-# Función para guardar datos en Google Sheets
-def guardar_datos(df_nuevo):
+# Función para enviar datos a Google Forms (Escritura segura)
+def enviar_a_google_forms(datos):
+    form_data = {
+        "entry.1632473697": datos["ID"],
+        "entry.1333641161": datos["Nombre"],
+        "entry.484941694": datos["Telefono"],
+        "entry.2027408841": datos["Direccion"],
+        "entry.1736677562": datos["Marca_Equipo"],
+        "entry.419193022": datos["Modelo"],
+        "entry.974925842": datos["Frigorias"],
+        "entry.1447607470": datos["Tipo_Gas"],
+        "entry.27371137": datos["Ultimo_Servicio"],
+        "entry.121068501": datos["Proximo_Mantenimiento"],
+        "entry.1015093819": datos["Notas"]
+    }
+    
     try:
-        conn.update(data=df_nuevo)
+        response = requests.post(FORM_URL, data=form_data)
         st.cache_data.clear()
-        return True
+        return response.status_code == 200
     except Exception as e:
-        st.error(f"Error de permisos al actualizar Google Sheets: {e}")
+        st.error(f"Error al enviar datos: {e}")
         return False
 
 # Función para generar el presupuesto en PDF personalizado
@@ -197,10 +215,9 @@ elif opcion == "➕ Registrar Nuevo Cliente / Equipo":
                     "Notas": notas
                 }
                 
-                df_actualizado = pd.concat([df_clientes, pd.DataFrame([nueva_fila])], ignore_index=True)
-                exito = guardar_datos(df_actualizado)
+                exito = enviar_a_google_forms(nueva_fila)
                 if exito:
-                    st.success(f"✅ ¡Cliente '{nombre}' registrado correctamente en Google Sheets!")
+                    st.success(f"✅ ¡Cliente '{nombre}' registrado e integrado correctamente a tu base de datos!")
 
 # ---------------------------------------------------------
 # OPCIÓN 2: LISTA DE CLIENTES Y EQUIPOS
