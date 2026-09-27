@@ -7,30 +7,35 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import io
+from streamlit_gsheets import GSheetsConnection
 
 # Configuración inicial de la página
 st.set_page_config(page_title="Gestión Climatización", page_icon="❄️", layout="wide")
 
 st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
-# Archivos de base de datos local
-DB_CLIENTES = "clientes_equipos.csv"
 LOGO_FILE = "logo.png"
 
-# Función para cargar los datos
+# Conexión a Google Sheets
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# Función para cargar datos de Google Sheets
 def cargar_datos():
-    if os.path.exists(DB_CLIENTES):
-        return pd.read_csv(DB_CLIENTES)
-    else:
+    try:
+        df = conn.read(ttl=0)
+        df = df.dropna(how="all")
+        return df
+    except Exception as e:
         return pd.DataFrame(columns=[
             "ID", "Nombre", "Telefono", "Direccion", 
             "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
             "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
         ])
 
-# Función para guardar los datos
+# Función para guardar datos en Google Sheets
 def guardar_datos(df):
-    df.to_csv(DB_CLIENTES, index=False)
+    conn.update(data=df)
+    st.cache_data.clear()
 
 # Función para generar el presupuesto en PDF personalizado
 def generar_pdf_presupuesto(empresa_nombre, empresa_contacto, cliente_nombre, cliente_tel, cliente_dir, items, notas, total):
@@ -176,7 +181,7 @@ elif opcion == "➕ Registrar Nuevo Cliente / Equipo":
                 nueva_fila = {
                     "ID": nuevo_id,
                     "Nombre": nombre,
-                    "Telefono": telefono,
+                    "Telefono": str(telefono),
                     "Direccion": direccion,
                     "Marca_Equipo": marca,
                     "Modelo": modelo,
@@ -189,7 +194,7 @@ elif opcion == "➕ Registrar Nuevo Cliente / Equipo":
                 
                 df_clientes = pd.concat([df_clientes, pd.DataFrame([nueva_fila])], ignore_index=True)
                 guardar_datos(df_clientes)
-                st.success(f"✅ ¡Cliente '{nombre}' registrado correctamente!")
+                st.success(f"✅ ¡Cliente '{nombre}' registrado correctamente en Google Sheets!")
 
 # ---------------------------------------------------------
 # OPCIÓN 2: LISTA DE CLIENTES Y EQUIPOS
@@ -203,9 +208,9 @@ elif opcion == "📋 Lista de Clientes & Equipos":
         busqueda = st.text_input("🔍 Buscar cliente por Nombre, Teléfono o Dirección:")
         if busqueda:
             df_filtrado = df_clientes[
-                df_clientes['Nombre'].str.contains(busqueda, case=False, na=False) |
-                df_clientes['Telefono'].str.contains(busqueda, case=False, na=False) |
-                df_clientes['Direccion'].str.contains(busqueda, case=False, na=False)
+                df_clientes['Nombre'].astype(str).str.contains(busqueda, case=False, na=False) |
+                df_clientes['Telefono'].astype(str).str.contains(busqueda, case=False, na=False) |
+                df_clientes['Direccion'].astype(str).str.contains(busqueda, case=False, na=False)
             ]
         else:
             df_filtrado = df_clientes
@@ -245,7 +250,6 @@ elif opcion == "📄 Crear Presupuesto PDF":
 
         st.markdown(f"### 💰 **Total Presupuestado: ${total:,.2f}**")
 
-        # Texto corregido: de "Contaduría" a "Contado"
         obs = st.text_area("Observaciones o validez de la oferta", "Validez del presupuesto: 10 días. Forma de pago: Contado / Transferencia.")
 
         if st.button("📄 Generar y Descargar PDF"):
@@ -266,7 +270,7 @@ elif opcion == "📄 Crear Presupuesto PDF":
             st.download_button(
                 label="⬇️ Haz clic aquí para descargar el PDF",
                 data=pdf_bytes,
-                file_name=f"Presupuesto_{cliente_info['Nombre'].replace(' ', '_')}.pdf",
+                file_name=f"Presupuesto_{str(cliente_info['Nombre']).replace(' ', '_')}.pdf",
                 mime="application/pdf"
             )
 
