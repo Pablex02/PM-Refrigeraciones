@@ -33,9 +33,14 @@ def cargar_datos():
         ])
 
 # Función para guardar datos en Google Sheets
-def guardar_datos(df):
-    conn.update(data=df)
-    st.cache_data.clear()
+def guardar_datos(df_nuevo):
+    try:
+        conn.update(data=df_nuevo)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Error de permisos al actualizar Google Sheets: {e}")
+        return False
 
 # Función para generar el presupuesto en PDF personalizado
 def generar_pdf_presupuesto(empresa_nombre, empresa_contacto, cliente_nombre, cliente_tel, cliente_dir, items, notas, total):
@@ -192,9 +197,10 @@ elif opcion == "➕ Registrar Nuevo Cliente / Equipo":
                     "Notas": notas
                 }
                 
-                df_clientes = pd.concat([df_clientes, pd.DataFrame([nueva_fila])], ignore_index=True)
-                guardar_datos(df_clientes)
-                st.success(f"✅ ¡Cliente '{nombre}' registrado correctamente en Google Sheets!")
+                df_actualizado = pd.concat([df_clientes, pd.DataFrame([nueva_fila])], ignore_index=True)
+                exito = guardar_datos(df_actualizado)
+                if exito:
+                    st.success(f"✅ ¡Cliente '{nombre}' registrado correctamente en Google Sheets!")
 
 # ---------------------------------------------------------
 # OPCIÓN 2: LISTA DE CLIENTES Y EQUIPOS
