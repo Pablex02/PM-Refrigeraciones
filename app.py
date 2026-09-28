@@ -17,14 +17,7 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Solucionar el formato de private_key directamente en la memoria de Streamlit secrets
-if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-    if "private_key" in st.secrets["connections"]["gsheets"]:
-        pk = st.secrets["connections"]["gsheets"]["private_key"]
-        if "\\n" in pk:
-            st.secrets["connections"]["gsheets"]["private_key"] = pk.replace("\\n", "\n")
-
-# Crear la conexión limpia dejando que Streamlit-GSheets tome las credenciales automáticamente
+# Crear la conexión limpia con Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
