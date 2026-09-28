@@ -17,17 +17,23 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Crear una copia de los secrets para reparar la clave privada sin modificar st.secrets
-secrets_dict = dict(st.secrets["connections"]["gsheets"])
-if "private_key" in secrets_dict:
-    secrets_dict["private_key"] = secrets_dict["private_key"].replace("\\n", "\n")
+# Preparar la clave y la configuración para GSheetsConnection
+raw_secrets = dict(st.secrets["connections"]["gsheets"])
 
-# Quitar los parámetros que st.connection ya maneja internamente para evitar duplicados
-secrets_dict.pop("type", None)
-secrets_dict.pop("spreadsheet", None)
+# Si la private_key tiene \n escritos como texto, los convertimos en saltos de línea reales
+if "private_key" in raw_secrets:
+    raw_secrets["private_key"] = raw_secrets["private_key"].replace("\\n", "\n")
 
-# Crear la conexión
-conn = st.connection("gsheets", type=GSheetsConnection, **secrets_dict)
+# Obtener la URL del spreadsheet
+spreadsheet_url = raw_secrets.pop("spreadsheet", None)
+
+# Crear la conexión estructurando correctamente service_account_info
+conn = st.connection(
+    "gsheets",
+    type=GSheetsConnection,
+    spreadsheet=spreadsheet_url,
+    service_account_info=raw_secrets
+)
 
 def cargar_datos():
     try:
