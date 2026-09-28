@@ -21,28 +21,30 @@ LOGO_FILE = "logo.png"
 # Conexión directa con Google Sheets usando gspread oficial
 def obtener_conexion_gsheets():
     try:
-        # Convertir a diccionario independiente
-        secrets_dict = dict(st.secrets["connections"]["gsheets"])
-        
-        if "private_key" in secrets_dict:
-            pk = str(secrets_dict["private_key"])
-            # Reemplazo robusto de escapes de salto de línea
-            pk = pk.replace("\\n", "\n").replace("\\\\n", "\n")
-            secrets_dict["private_key"] = pk
-        
+        if "service_account" in st.secrets:
+            creds_info = json.loads(st.secrets["service_account"])
+        else:
+            creds_info = dict(st.secrets["connections"]["gsheets"])
+            if "private_key" in creds_info:
+                pk = str(creds_info["private_key"])
+                pk = pk.replace("\\n", "\n").replace("\\\\n", "\n").strip()
+                if pk.startswith('"') and pk.endswith('"'):
+                    pk = pk[1:-1]
+                creds_info["private_key"] = pk
+
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
         ]
         
-        creds = Credentials.from_service_account_info(secrets_dict, scopes=scopes)
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
         client = gspread.authorize(creds)
         
-        spreadsheet_url = secrets_dict.get("spreadsheet", "")
+        spreadsheet_url = creds_info.get("spreadsheet", "")
         if spreadsheet_url:
             sheet = client.open_by_url(spreadsheet_url).sheet1
         else:
-            sheet = client.open_by_key(secrets_dict.get("spreadsheet_id", "")).sheet1
+            sheet = client.open_by_key(creds_info.get("spreadsheet_id", "")).sheet1
             
         return sheet
     except Exception as e:
