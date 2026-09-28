@@ -17,8 +17,14 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Crear la conexión
-conn = st.connection("gsheets", type=GSheetsConnection)
+# Convertir la clave de secrets en un diccionario normal para corregir el formato PEM
+secrets_dict = dict(st.secrets["connections"]["gsheets"])
+if "private_key" in secrets_dict:
+    # Asegura que los \n se conviertan en saltos de línea reales para la librería de criptografía
+    secrets_dict["private_key"] = secrets_dict["private_key"].replace("\\n", "\n")
+
+# Crear la conexión pasando los datos corregidos
+conn = st.connection("gsheets", type=GSheetsConnection, **secrets_dict)
 
 def cargar_datos():
     try:
