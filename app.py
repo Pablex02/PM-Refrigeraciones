@@ -17,16 +17,8 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Modificar el diccionario en memoria para reparar la clave privada sin tocar st.secrets directamente
-secrets_dict = dict(st.secrets["connections"]["gsheets"])
-if "private_key" in secrets_dict:
-    secrets_dict["private_key"] = secrets_dict["private_key"].replace("\\n", "\n")
-
-# Eliminar 'type' del diccionario si existe para no duplicar el argumento
-secrets_dict.pop("type", None)
-
-# Crear la conexión
-conn = st.connection("gsheets", type=GSheetsConnection, **secrets_dict)
+# Crear la conexión limpia (Streamlit lee los Secrets de forma automática)
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
     try:
