@@ -17,7 +17,7 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Crear la conexión limpia (Streamlit lee los Secrets de forma automática)
+# Crear la conexión
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
