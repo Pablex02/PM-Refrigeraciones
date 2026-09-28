@@ -17,10 +17,21 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Crear la conexión limpia con Google Sheets
+# Crear la conexión
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+def reparar_clave_secreta():
+    """Asegura que los saltos de línea de la private_key estén correctamente formateados."""
+    try:
+        if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+            pk = st.secrets["connections"]["gsheets"].get("private_key", "")
+            if "\\n" in pk:
+                st.secrets["connections"]["gsheets"]["private_key"] = pk.replace("\\n", "\n")
+    except Exception:
+        pass
+
 def cargar_datos():
+    reparar_clave_secreta()
     try:
         df = conn.read(ttl=0)
         df = df.dropna(how="all")
@@ -34,6 +45,7 @@ def cargar_datos():
         ])
 
 def guardar_base_completa(df):
+    reparar_clave_secreta()
     try:
         conn.update(data=df)
         st.cache_data.clear()
