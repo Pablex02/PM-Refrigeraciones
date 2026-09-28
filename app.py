@@ -1,12 +1,13 @@
-import streamlit as st
-import pandas as pd
-from datetime import datetime, timedelta
+import json
 import os
+import io
+import pandas as pd
+import streamlit as st
+from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-import io
 from streamlit_gsheets import GSheetsConnection
 
 # Configuración de la página
@@ -16,8 +17,14 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Conexión nativa con Service Account
-conn = st.connection("gsheets", type=GSheetsConnection)
+# Conexión con manejo de saltos de línea para la private_key
+try:
+    credentials = dict(st.secrets["connections"]["gsheets"])
+    if "private_key" in credentials:
+        credentials["private_key"] = credentials["private_key"].replace("\\n", "\n")
+    conn = st.connection("gsheets", type=GSheetsConnection, **credentials)
+except Exception:
+    conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
     try:
