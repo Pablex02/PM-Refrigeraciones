@@ -51,6 +51,63 @@ def obtener_conexion_gsheets():
         st.error(f"Error de conexión con Google Sheets: {e}")
         return None
 
+# Persistencia de Datos del Negocio en Google Sheets
+def obtener_hoja_configuracion():
+    sheet = obtener_conexion_gsheets()
+    if sheet is None:
+        return None
+    try:
+        spreadsheet = sheet.spreadsheet
+        try:
+            config_sheet = spreadsheet.worksheet("Configuracion")
+        except Exception:
+            # Si no existe la solapa Configuracion, la crea automáticamente
+            config_sheet = spreadsheet.add_worksheet(title="Configuracion", rows="10", cols="2")
+            config_sheet.update("A1:B3", [
+                ["Clave", "Valor"],
+                ["empresa_nombre", "Servicio Técnico Climatización"],
+                ["empresa_contacto", "Tel: +54 9 3564 123456 | Morteros, Córdoba"]
+            ])
+        return config_sheet
+    except Exception as e:
+        st.error(f"Error al obtener configuración: {e}")
+        return None
+
+def cargar_configuracion():
+    config_sheet = obtener_hoja_configuracion()
+    if config_sheet is None:
+        return "Servicio Técnico Climatización", "Tel: +54 9 3564 123456 | Morteros, Córdoba"
+    try:
+        records = config_sheet.get_all_records(default_blank="")
+        config_dict = {str(row.get("Clave")): str(row.get("Valor")) for row in records if "Clave" in row and "Valor" in row}
+        nombre = config_dict.get("empresa_nombre", "Servicio Técnico Climatización")
+        contacto = config_dict.get("empresa_contacto", "Tel: +54 9 3564 123456 | Morteros, Córdoba")
+        return nombre, contacto
+    except Exception:
+        try:
+            val_nombre = config_sheet.cell(2, 2).value or "Servicio Técnico Climatización"
+            val_contacto = config_sheet.cell(3, 2).value or "Tel: +54 9 3564 123456 | Morteros, Córdoba"
+            return val_nombre, val_contacto
+        except Exception:
+            return "Servicio Técnico Climatización", "Tel: +54 9 3564 123456 | Morteros, Córdoba"
+
+def guardar_configuracion(nombre, contacto):
+    config_sheet = obtener_hoja_configuracion()
+    if config_sheet is None:
+        return False
+    try:
+        data = [
+            ["Clave", "Valor"],
+            ["empresa_nombre", nombre],
+            ["empresa_contacto", contacto]
+        ]
+        config_sheet.clear()
+        config_sheet.update("A1:B3", data)
+        return True
+    except Exception as e:
+        st.error(f"Error al guardar configuración: {e}")
+        return False
+
 def cargar_datos():
     sheet = obtener_conexion_gsheets()
     if sheet is None:
@@ -83,9 +140,8 @@ def guardar_base_completa(df):
         return False
     try:
         sheet.clear()
-        # Convertir dataframe a lista de listas incluyendo encabezados
         data_to_write = [df.columns.values.tolist()] + df.astype(str).values.tolist()
-        sheet.update(data_to_write)
+        sheet.update("A1", data_to_write)
         st.cache_data.clear()
         return True
     except Exception as e:
@@ -175,12 +231,22 @@ opcion = st.sidebar.radio("Ir a:", [
 # ---------------------------------------------------------
 if opcion == "⚙️ Configuración del Negocio":
     st.subheader("Personalización de tu Negocio")
-    empresa_nombre = st.text_input("Nombre comercial de tu negocio", value=st.session_state.get("empresa_nombre", "Servicio Técnico Climatización"))
-    empresa_contacto = st.text_area("Datos de contacto (Teléfono, Email, Dirección)", value=st.session_state.get("empresa_contacto", "Tel: +54 9 3564 123456 | Morteros, Córdoba"))
+    
+    emp_nombre_actual, emp_contacto_actual = cargar_configuracion()
+    
+    with st.form("form_configuracion"):
+        empresa_nombre = st.text_input("Nombre comercial de tu negocio", value=emp_nombre_actual)
+        empresa_contacto = st.text_area("Datos de contacto (Teléfono, Email, Dirección)", value=emp_contacto_actual)
+        
+        btn_guardar_config = st.form_submit_button("💾 Guardar Datos del Negocio")
+        
+        if btn_guardar_config:
+            if guardar_configuracion(empresa_nombre, empresa_contacto):
+                st.session_state["empresa_nombre"] = empresa_nombre
+                st.session_state["empresa_contacto"] = empresa_contacto
+                st.success("✅ ¡Datos del negocio guardados permanentemente en Google Sheets!")
 
-    st.session_state["empresa_nombre"] = empresa_nombre
-    st.session_state["empresa_contacto"] = empresa_contacto
-
+    st.markdown("---")
     st.markdown("### 📷 Cargar Logo Personal")
     uploaded_logo = st.file_uploader("Sube tu logo (Formato PNG o JPG)", type=["png", "jpg", "jpeg"])
 
@@ -373,8 +439,7 @@ elif opcion == "📄 Crear Presupuesto PDF":
         obs = st.text_area("Observaciones", "Validez del presupuesto: 10 días. Forma de pago: Contado / Transferencia.")
 
         if st.button("📄 Generar y Descargar PDF"):
-            emp_nombre = st.session_state.get("empresa_nombre", "Servicio Técnico Climatización")
-            emp_contacto = st.session_state.get("empresa_contacto", "Teléfono / Dirección de contacto")
+            emp_nombre, emp_contacto = cargar_configuracion()
 
             pdf_bytes = generar_pdf_presupuesto(
                 emp_nombre,
