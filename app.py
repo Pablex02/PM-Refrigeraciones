@@ -17,17 +17,15 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Preparar el diccionario de secrets para limpiar la clave privada
-raw_secrets = dict(st.secrets["connections"]["gsheets"])
+# Solucionar el formato de private_key directamente en la memoria de Streamlit secrets
+if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+    if "private_key" in st.secrets["connections"]["gsheets"]:
+        pk = st.secrets["connections"]["gsheets"]["private_key"]
+        if "\\n" in pk:
+            st.secrets["connections"]["gsheets"]["private_key"] = pk.replace("\\n", "\n")
 
-if "private_key" in raw_secrets:
-    raw_secrets["private_key"] = raw_secrets["private_key"].replace("\\n", "\n")
-
-# Quitar 'type' si existe para evitar conflictos de argumentos
-raw_secrets.pop("type", None)
-
-# Crear la conexión usando la palabra clave de configuración kwargs
-conn = st.connection("gsheets", type=GSheetsConnection, **raw_secrets)
+# Crear la conexión limpia dejando que Streamlit-GSheets tome las credenciales automáticamente
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
     try:
