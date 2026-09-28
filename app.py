@@ -17,7 +17,12 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Crear la conexión limpia con Google Sheets
+# Reparar el formato de la clave privada directamente desde st.secrets
+if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+    if "private_key" in st.secrets["connections"]["gsheets"]:
+        st.secrets["connections"]["gsheets"]["private_key"] = st.secrets["connections"]["gsheets"]["private_key"].replace("\\n", "\n")
+
+# Crear la conexión
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
