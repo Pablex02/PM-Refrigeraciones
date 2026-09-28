@@ -17,17 +17,8 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Convertir la clave de secrets en un diccionario normal para corregir el formato PEM
-secrets_dict = dict(st.secrets["connections"]["gsheets"])
-if "private_key" in secrets_dict:
-    # Asegura que los \n se conviertan en saltos de línea reales
-    secrets_dict["private_key"] = secrets_dict["private_key"].replace("\\n", "\n")
-
-# Eliminar 'type' del diccionario si existe para evitar duplicar el argumento
-secrets_dict.pop("type", None)
-
-# Crear la conexión pasando los datos corregidos
-conn = st.connection("gsheets", type=GSheetsConnection, **secrets_dict)
+# Crear la conexión limpia con Google Sheets
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
     try:
@@ -35,6 +26,7 @@ def cargar_datos():
         df = df.dropna(how="all")
         return df
     except Exception as e:
+        st.warning("Conectando con Google Sheets o inicializando tabla...")
         return pd.DataFrame(columns=[
             "ID", "Nombre", "Telefono", "Direccion", 
             "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
@@ -209,7 +201,7 @@ elif opcion == "📋 Lista de Clientes & Equipos":
     st.subheader("Base de Datos de Clientes y Equipos")
 
     if df_clientes.empty:
-        st.info("Aún no tienes clientes registrados.")
+        st.info("Aún no tienes clientes registrados o la tabla está vacía.")
     else:
         busqueda = st.text_input("🔍 Buscar por Nombre, Teléfono o Dirección:")
         if busqueda:
