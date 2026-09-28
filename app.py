@@ -8,7 +8,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from streamlit_gsheets import GSheetsConnection
+import gspread
+from google.oauth2.service_account import Credentials
 
 # Configuración de la página
 st.set_page_config(page_title="Gestión Climatización", page_icon="❄️", layout="wide")
@@ -17,27 +18,52 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Crear la conexión
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-def reparar_clave_secreta():
-    """Asegura que los saltos de línea de la private_key estén correctamente formateados."""
+# Conexión directa con Google Sheets usando gspread oficial
+def obtener_conexion_gsheets():
     try:
-        if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-            pk = st.secrets["connections"]["gsheets"].get("private_key", "")
-            if "\\n" in pk:
-                st.secrets["connections"]["gsheets"]["private_key"] = pk.replace("\\n", "\n")
-    except Exception:
-        pass
+        secrets_dict = dict(st.secrets["connections"]["gsheets"])
+        if "private_key" in secrets_dict:
+            secrets_dict["private_key"] = secrets_dict["private_key"].replace("\\n", "\n")
+        
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        
+        creds = Credentials.from_service_account_info(secrets_dict, scopes=scopes)
+        client = gspread.authorize(creds)
+        
+        spreadsheet_url = secrets_dict.get("spreadsheet", "")
+        if spreadsheet_url:
+            sheet = client.open_by_url(spreadsheet_url).sheet1
+        else:
+            sheet = client.open_by_key(secrets_dict.get("spreadsheet_id", "")).sheet1
+            
+        return sheet
+    except Exception as e:
+        st.error(f"Error de conexión con Google Sheets: {e}")
+        return None
 
 def cargar_datos():
-    reparar_clave_secreta()
+    sheet = obtener_conexion_gsheets()
+    if sheet is None:
+        return pd.DataFrame(columns=[
+            "ID", "Nombre", "Telefono", "Direccion", 
+            "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
+            "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
+        ])
     try:
-        df = conn.read(ttl=0)
-        df = df.dropna(how="all")
+        data = sheet.get_all_records()
+        if not data:
+            return pd.DataFrame(columns=[
+                "ID", "Nombre", "Telefono", "Direccion", 
+                "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
+                "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
+            ])
+        df = pd.DataFrame(data)
         return df
     except Exception as e:
-        st.warning("Conectando con Google Sheets o inicializando tabla...")
+        st.warning("Cargando tabla o inicializando datos...")
         return pd.DataFrame(columns=[
             "ID", "Nombre", "Telefono", "Direccion", 
             "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
@@ -45,9 +71,14 @@ def cargar_datos():
         ])
 
 def guardar_base_completa(df):
-    reparar_clave_secreta()
+    sheet = obtener_conexion_gsheets()
+    if sheet is None:
+        return False
     try:
-        conn.update(data=df)
+        sheet.clear()
+        # Convertir dataframe a lista de listas incluyendo encabezados
+        data_to_write = [df.columns.values.tolist()] + df.astype(str).values.tolist()
+        sheet.update(data_to_write)
         st.cache_data.clear()
         return True
     except Exception as e:
