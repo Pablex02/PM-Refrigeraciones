@@ -17,16 +17,8 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Modificar el diccionario en memoria para reemplazar \\n por saltos de línea reales
+# Crear la conexión
 conn = st.connection("gsheets", type=GSheetsConnection)
-if "private_key" in secrets_dict:
-    # Si la clave tiene comillas triples o dobles al inicio/fin, las limpiamos
-    p_key = secrets_dict["private_key"].strip('"').strip("'")
-    # Convertimos los \n en saltos de línea reales
-    secrets_dict["private_key"] = p_key.replace("\\n", "\n")
-
-# Crear la conexión pasándole la configuración corregida
-conn = st.connection("gsheets", type=GSheetsConnection, kwargs=secrets_dict)
 
 def cargar_datos():
     try:
