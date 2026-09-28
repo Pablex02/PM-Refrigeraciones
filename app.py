@@ -125,6 +125,8 @@ def cargar_datos():
                 "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
             ])
         df = pd.DataFrame(data)
+        # Convertir todas las columnas a tipo string para evitar errores de tipo en Pandas (LossySetitemError)
+        df = df.astype(str)
         return df
     except Exception as e:
         st.warning("Cargando tabla o inicializando datos...")
@@ -293,17 +295,17 @@ elif opcion == "➕ Registrar Nuevo Cliente / Equipo":
             else:
                 nuevo_id = len(df_clientes) + 1
                 nueva_fila = {
-                    "ID": nuevo_id,
-                    "Nombre": nombre,
+                    "ID": str(nuevo_id),
+                    "Nombre": str(nombre),
                     "Telefono": str(telefono),
-                    "Direccion": direccion,
-                    "Marca_Equipo": marca,
-                    "Modelo": modelo,
-                    "Frigorias": frigorias,
-                    "Tipo_Gas": tipo_gas,
+                    "Direccion": str(direccion),
+                    "Marca_Equipo": str(marca),
+                    "Modelo": str(modelo),
+                    "Frigorias": str(frigorias),
+                    "Tipo_Gas": str(tipo_gas),
                     "Ultimo_Servicio": fecha_servicio.strftime('%Y-%m-%d'),
                     "Proximo_Mantenimiento": fecha_prox_mantenimiento.strftime('%Y-%m-%d'),
-                    "Notas": notas
+                    "Notas": str(notas)
                 }
                 
                 df_actualizado = pd.concat([df_clientes, pd.DataFrame([nueva_fila])], ignore_index=True)
@@ -344,8 +346,8 @@ elif opcion == "✏️ Editar / Mantenimiento / Eliminar":
         cliente_seleccionado = st.selectbox("Selecciona la Ficha / Registro a gestionar:", opciones_clientes)
 
         if cliente_seleccionado:
-            id_sel = int(cliente_seleccionado.split(" - ")[0])
-            idx_registro = df_clientes[df_clientes["ID"] == id_sel].index[0]
+            id_sel = str(cliente_seleccionado.split(" - ")[0])
+            idx_registro = df_clientes[df_clientes["ID"].astype(str) == id_sel].index[0]
             row_actual = df_clientes.loc[idx_registro]
 
             tab_editar, tab_eliminar = st.tabs(["✏️ Editar / Renovar Service", "❌ Eliminar Registro"])
@@ -362,15 +364,25 @@ elif opcion == "✏️ Editar / Mantenimiento / Eliminar":
                     with c2:
                         edit_marca = st.text_input("Equipo / Ubicación", value=str(row_actual["Marca_Equipo"]))
                         edit_modelo = st.text_input("Modelo", value=str(row_actual["Modelo"]))
-                        edit_frigorias = st.number_input("Frigorías", value=int(row_actual["Frigorias"]) if pd.notnull(row_actual["Frigorias"]) else 3000)
-                        edit_gas = st.selectbox("Gas", ["R410A", "R32", "R22", "Otro"], index=0)
+                        
+                        try:
+                            val_frig = int(float(row_actual["Frigorias"]))
+                        except Exception:
+                            val_frig = 3000
+
+                        edit_frigorias = st.number_input("Frigorías", value=val_frig)
+                        
+                        opciones_gas = ["R410A", "R32", "R22", "Otro"]
+                        gas_actual = str(row_actual["Tipo_Gas"])
+                        idx_gas = opciones_gas.index(gas_actual) if gas_actual in opciones_gas else 0
+                        edit_gas = st.selectbox("Gas", opciones_gas, index=idx_gas)
 
                     st.markdown("---")
                     st.markdown("##### 📅 Actualizar Fecha de Servicio Realizado")
                     
                     try:
                         fecha_def = datetime.strptime(str(row_actual["Ultimo_Servicio"]), "%Y-%m-%d")
-                    except:
+                    except Exception:
                         fecha_def = datetime.now()
 
                     edit_fecha_serv = st.date_input("Fecha del Nuevo Service Realizado", fecha_def)
@@ -382,16 +394,18 @@ elif opcion == "✏️ Editar / Mantenimiento / Eliminar":
                     btn_guardar_edicion = st.form_submit_button("💾 Guardar Cambios")
 
                     if btn_guardar_edicion:
-                        df_clientes.loc[idx_registro, "Nombre"] = edit_nombre
+                        df_clientes = df_clientes.astype(str)
+                        
+                        df_clientes.loc[idx_registro, "Nombre"] = str(edit_nombre)
                         df_clientes.loc[idx_registro, "Telefono"] = str(edit_telefono)
-                        df_clientes.loc[idx_registro, "Direccion"] = edit_direccion
-                        df_clientes.loc[idx_registro, "Marca_Equipo"] = edit_marca
-                        df_clientes.loc[idx_registro, "Modelo"] = edit_modelo
-                        df_clientes.loc[idx_registro, "Frigorias"] = edit_frigorias
-                        df_clientes.loc[idx_registro, "Tipo_Gas"] = edit_gas
+                        df_clientes.loc[idx_registro, "Direccion"] = str(edit_direccion)
+                        df_clientes.loc[idx_registro, "Marca_Equipo"] = str(edit_marca)
+                        df_clientes.loc[idx_registro, "Modelo"] = str(edit_modelo)
+                        df_clientes.loc[idx_registro, "Frigorias"] = str(edit_frigorias)
+                        df_clientes.loc[idx_registro, "Tipo_Gas"] = str(edit_gas)
                         df_clientes.loc[idx_registro, "Ultimo_Servicio"] = edit_fecha_serv.strftime('%Y-%m-%d')
                         df_clientes.loc[idx_registro, "Proximo_Mantenimiento"] = edit_prox_maint.strftime('%Y-%m-%d')
-                        df_clientes.loc[idx_registro, "Notas"] = edit_notas
+                        df_clientes.loc[idx_registro, "Notas"] = str(edit_notas)
 
                         if guardar_base_completa(df_clientes):
                             st.success("✅ ¡Ficha actualizada correctamente!")
