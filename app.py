@@ -175,6 +175,7 @@ def generar_pdf_presupuesto(empresa_nombre, empresa_contacto, cliente_nombre, cl
     story.append(Spacer(1, 15))
 
     story.append(Paragraph(f"<b>PRESUPUESTO DE SERVICIO TÉCNICO</b>", ParagraphStyle('Tit', fontSize=14, textColor=colors.HexColor("#333333"))))
+    story.append(Spacer(1, 10))
     story.append(Paragraph(f"<b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')}", style_body))
     story.append(Spacer(1, 10))
 
