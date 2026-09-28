@@ -17,13 +17,16 @@ st.title("❄️ Sistema de Gestión - Servicio Técnico & Climatización")
 
 LOGO_FILE = "logo.png"
 
-# Reparar el formato de la clave privada directamente desde st.secrets
-if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-    if "private_key" in st.secrets["connections"]["gsheets"]:
-        st.secrets["connections"]["gsheets"]["private_key"] = st.secrets["connections"]["gsheets"]["private_key"].replace("\\n", "\n")
+# Crear una copia en diccionario para formatear la clave privada en memoria
+secrets_dict = dict(st.secrets["connections"]["gsheets"])
+if "private_key" in secrets_dict:
+    secrets_dict["private_key"] = secrets_dict["private_key"].replace("\\n", "\n")
 
-# Crear la conexión
-conn = st.connection("gsheets", type=GSheetsConnection)
+# Quitar 'type' si existe en el diccionario para evitar duplicados al usar st.connection
+secrets_dict.pop("type", None)
+
+# Crear la conexión usando la configuración corregida
+conn = st.connection("gsheets", type=GSheetsConnection, **secrets_dict)
 
 def cargar_datos():
     try:
