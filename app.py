@@ -21,9 +21,14 @@ LOGO_FILE = "logo.png"
 # Conexión directa con Google Sheets usando gspread oficial
 def obtener_conexion_gsheets():
     try:
+        # Convertir a diccionario independiente
         secrets_dict = dict(st.secrets["connections"]["gsheets"])
+        
         if "private_key" in secrets_dict:
-            secrets_dict["private_key"] = secrets_dict["private_key"].replace("\\n", "\n")
+            pk = str(secrets_dict["private_key"])
+            # Reemplazo robusto de escapes de salto de línea
+            pk = pk.replace("\\n", "\n").replace("\\\\n", "\n")
+            secrets_dict["private_key"] = pk
         
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
