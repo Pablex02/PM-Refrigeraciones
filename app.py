@@ -1,6 +1,7 @@
 import json
 import os
 import io
+import base64
 import pandas as pd
 import streamlit as st
 from datetime import datetime, timedelta
@@ -51,7 +52,7 @@ def obtener_conexion_gsheets():
         st.error(f"Error de conexión con Google Sheets: {e}")
         return None
 
-# Persistencia de Datos del Negocio en Google Sheets
+# Persistencia de Datos y Logo en Google Sheets
 def obtener_hoja_configuracion():
     sheet = obtener_conexion_gsheets()
     if sheet is None:
@@ -61,11 +62,12 @@ def obtener_hoja_configuracion():
         try:
             config_sheet = spreadsheet.worksheet("Configuracion")
         except Exception:
-            config_sheet = spreadsheet.add_worksheet(title="Configuracion", rows="10", cols="2")
-            config_sheet.update("A1:B3", [
+            config_sheet = spreadsheet.add_worksheet(title="Configuracion", rows="15", cols="2")
+            config_sheet.update("A1:B4", [
                 ["Clave", "Valor"],
                 ["empresa_nombre", "Servicio Técnico Climatización"],
-                ["empresa_contacto", "Tel: +54 9 3564 123456 | Morteros, Córdoba"]
+                ["empresa_contacto", "Tel: +54 9 3564 123456 | Morteros, Córdoba"],
+                ["logo_base64", ""]
             ])
         return config_sheet
     except Exception as e:
@@ -74,34 +76,57 @@ def obtener_hoja_configuracion():
 
 def cargar_configuracion():
     config_sheet = obtener_hoja_configuracion()
+    default_nombre = "Servicio Técnico Climatización"
+    default_contacto = "Tel: +54 9 3564 123456 | Morteros, Córdoba"
+    
     if config_sheet is None:
-        return "Servicio Técnico Climatización", "Tel: +54 9 3564 123456 | Morteros, Córdoba"
+        return default_nombre, default_contacto
     try:
         records = config_sheet.get_all_records(default_blank="")
         config_dict = {str(row.get("Clave")): str(row.get("Valor")) for row in records if "Clave" in row and "Valor" in row}
-        nombre = config_dict.get("empresa_nombre", "Servicio Técnico Climatización")
-        contacto = config_dict.get("empresa_contacto", "Tel: +54 9 3564 123456 | Morteros, Córdoba")
+        nombre = config_dict.get("empresa_nombre", default_nombre)
+        contacto = config_dict.get("empresa_contacto", default_contacto)
+        
+        # Restaurar logo local si existe en la nube y no está en disco
+        logo_b64 = config_dict.get("logo_base64", "")
+        if logo_b64 and not os.path.exists(LOGO_FILE):
+            try:
+                with open(LOGO_FILE, "wb") as fh:
+                    fh.write(base64.b64decode(logo_b64))
+            except Exception:
+                pass
+
         return nombre, contacto
     except Exception:
-        try:
-            val_nombre = config_sheet.cell(2, 2).value or "Servicio Técnico Climatización"
-            val_contacto = config_sheet.cell(3, 2).value or "Tel: +54 9 3564 123456 | Morteros, Córdoba"
-            return val_nombre, val_contacto
-        except Exception:
-            return "Servicio Técnico Climatización", "Tel: +54 9 3564 123456 | Morteros, Córdoba"
+        return default_nombre, default_contacto
 
-def guardar_configuracion(nombre, contacto):
+def guardar_configuracion(nombre, contacto, logo_path=None):
     config_sheet = obtener_hoja_configuracion()
     if config_sheet is None:
         return False
     try:
+        # Leer logo actual si ya estaba guardado
+        logo_b64 = ""
+        try:
+            records = config_sheet.get_all_records(default_blank="")
+            for r in records:
+                if str(r.get("Clave")) == "logo_base64":
+                    logo_b64 = str(r.get("Valor"))
+        except Exception:
+            pass
+
+        if logo_path and os.path.exists(logo_path):
+            with open(logo_path, "rb") as image_file:
+                logo_b64 = base64.b64encode(image_file.read()).decode('utf-8')
+
         data = [
             ["Clave", "Valor"],
             ["empresa_nombre", nombre],
-            ["empresa_contacto", contacto]
+            ["empresa_contacto", contacto],
+            ["logo_base64", logo_b64]
         ]
         config_sheet.clear()
-        config_sheet.update("A1:B3", data)
+        config_sheet.update("A1:B4", data)
         return True
     except Exception as e:
         st.error(f"Error al guardar configuración: {e}")
@@ -119,12 +144,10 @@ def cargar_datos():
     try:
         data = sheet.get_all_records()
         if not data:
-            # Si la planilla está vacía, inicializamos las cabeceras
             sheet.update("A1", [columnas_requeridas])
             return pd.DataFrame(columns=columnas_requeridas)
         df = pd.DataFrame(data)
         
-        # Asegurar que existan todas las columnas necesarias si la tabla es vieja
         for col in columnas_requeridas:
             if col not in df.columns:
                 df[col] = ""
@@ -140,16 +163,33 @@ def guardar_base_completa(df):
     if sheet is None:
         return False
     try:
+        # Cargar configuración actual para no perderla al limpiar la hoja principal
+        config_sheet = obtener_hoja_configuracion()
+        config_data = []
+        if config_sheet:
+            try:
+                config_data = config_sheet.get_all_values()
+            except Exception:
+                pass
+
         sheet.clear()
         columnas = [
             "ID", "Nombre", "Telefono", "Direccion", 
             "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
             "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
         ]
-        # Asegurar orden de columnas
         df = df[columnas]
         data_to_write = [columnas] + df.astype(str).values.tolist()
         sheet.update("A1", data_to_write)
+
+        # Restaurar la solapa de configuración por si acaso
+        if config_data and config_sheet:
+            try:
+                config_sheet.clear()
+                config_sheet.update("A1", config_data)
+            except Exception:
+                pass
+
         st.cache_data.clear()
         return True
     except Exception as e:
@@ -181,6 +221,7 @@ def generar_pdf_presupuesto(empresa_nombre, empresa_contacto, cliente_nombre, cl
     story.append(Spacer(1, 15))
 
     story.append(Paragraph(f"<b>PRESUPUESTO DE SERVICIO TÉCNICO</b>", ParagraphStyle('Tit', fontSize=14, textColor=colors.HexColor("#333333"))))
+    story.append(Spacer(1, 15))
     story.append(Paragraph(f"<b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')}", style_body))
     story.append(Spacer(1, 10))
 
@@ -221,6 +262,8 @@ def generar_pdf_presupuesto(empresa_nombre, empresa_contacto, cliente_nombre, cl
     buffer.seek(0)
     return buffer
 
+# Cargar configuración inicial al arrancar
+cargar_configuracion()
 df_clientes = cargar_datos()
 
 # Navegación del Menú
@@ -246,25 +289,26 @@ if opcion == "⚙️ Configuración del Negocio":
         empresa_nombre = st.text_input("Nombre comercial de tu negocio", value=emp_nombre_actual)
         empresa_contacto = st.text_area("Datos de contacto (Teléfono, Email, Dirección)", value=emp_contacto_actual)
         
-        btn_guardar_config = st.form_submit_button("💾 Guardar Datos del Negocio")
+        uploaded_logo = st.file_uploader("Sube tu logo (Formato PNG o JPG)", type=["png", "jpg", "jpeg"])
+        
+        btn_guardar_config = st.form_submit_button("💾 Guardar Datos y Logo")
         
         if btn_guardar_config:
-            if guardar_configuracion(empresa_nombre, empresa_contacto):
-                st.session_state["empresa_nombre"] = empresa_nombre
-                st.session_state["empresa_contacto"] = empresa_contacto
-                st.success("✅ ¡Datos del negocio guardados permanentemente en Google Sheets!")
+            logo_temp_path = None
+            if uploaded_logo is not None:
+                logo_temp_path = LOGO_FILE
+                with open(logo_temp_path, "wb") as f:
+                    f.write(uploaded_logo.getbuffer())
+
+            if guardar_configuracion(empresa_nombre, empresa_contacto, logo_path=logo_temp_path):
+                st.success("✅ ¡Datos del negocio y logo guardados permanentemente en la nube!")
 
     st.markdown("---")
-    st.markdown("### 📷 Cargar Logo Personal")
-    uploaded_logo = st.file_uploader("Sube tu logo (Formato PNG o JPG)", type=["png", "jpg", "jpeg"])
-
-    if uploaded_logo is not None:
-        with open(LOGO_FILE, "wb") as f:
-            f.write(uploaded_logo.getbuffer())
-        st.success("¡Logo cargado correctamente!")
-
+    st.markdown("### 📷 Logo Actual del Negocio")
     if os.path.exists(LOGO_FILE):
-        st.image(LOGO_FILE, caption="Logo actual", width=150)
+        st.image(LOGO_FILE, caption="Logo registrado", width=150)
+    else:
+        st.info("Aún no hay ningún logo cargado.")
 
 # ---------------------------------------------------------
 # OPCIÓN 1: REGISTRAR NUEVO CLIENTE / EQUIPO
@@ -299,7 +343,6 @@ elif opcion == "➕ Registrar Nuevo Cliente / Equipo":
             if not nombre or not telefono or not direccion:
                 st.error("Por favor completa los campos obligatorios (*).")
             else:
-                # Calcular un ID único incremental seguro
                 if not df_clientes.empty and "ID" in df_clientes.columns:
                     try:
                         ids_numericos = pd.to_numeric(df_clientes["ID"], errors='coerce').dropna()
