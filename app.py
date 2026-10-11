@@ -61,7 +61,6 @@ def obtener_hoja_configuracion():
         try:
             config_sheet = spreadsheet.worksheet("Configuracion")
         except Exception:
-            # Si no existe la solapa Configuracion, la crea automáticamente
             config_sheet = spreadsheet.add_worksheet(title="Configuracion", rows="10", cols="2")
             config_sheet.update("A1:B3", [
                 ["Clave", "Valor"],
@@ -110,31 +109,31 @@ def guardar_configuracion(nombre, contacto):
 
 def cargar_datos():
     sheet = obtener_conexion_gsheets()
+    columnas_requeridas = [
+        "ID", "Nombre", "Telefono", "Direccion", 
+        "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
+        "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
+    ]
     if sheet is None:
-        return pd.DataFrame(columns=[
-            "ID", "Nombre", "Telefono", "Direccion", 
-            "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
-            "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
-        ])
+        return pd.DataFrame(columns=columnas_requeridas)
     try:
         data = sheet.get_all_records()
         if not data:
-            return pd.DataFrame(columns=[
-                "ID", "Nombre", "Telefono", "Direccion", 
-                "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
-                "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
-            ])
+            # Si la planilla está vacía, inicializamos las cabeceras
+            sheet.update("A1", [columnas_requeridas])
+            return pd.DataFrame(columns=columnas_requeridas)
         df = pd.DataFrame(data)
-        # Convertir todas las columnas a tipo string para evitar errores de tipo en Pandas (LossySetitemError)
+        
+        # Asegurar que existan todas las columnas necesarias si la tabla es vieja
+        for col in columnas_requeridas:
+            if col not in df.columns:
+                df[col] = ""
+                
         df = df.astype(str)
         return df
     except Exception as e:
         st.warning("Cargando tabla o inicializando datos...")
-        return pd.DataFrame(columns=[
-            "ID", "Nombre", "Telefono", "Direccion", 
-            "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
-            "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
-        ])
+        return pd.DataFrame(columns=columnas_requeridas)
 
 def guardar_base_completa(df):
     sheet = obtener_conexion_gsheets()
@@ -142,7 +141,14 @@ def guardar_base_completa(df):
         return False
     try:
         sheet.clear()
-        data_to_write = [df.columns.values.tolist()] + df.astype(str).values.tolist()
+        columnas = [
+            "ID", "Nombre", "Telefono", "Direccion", 
+            "Marca_Equipo", "Modelo", "Frigorias", "Tipo_Gas", 
+            "Ultimo_Servicio", "Proximo_Mantenimiento", "Notas"
+        ]
+        # Asegurar orden de columnas
+        df = df[columnas]
+        data_to_write = [columnas] + df.astype(str).values.tolist()
         sheet.update("A1", data_to_write)
         st.cache_data.clear()
         return True
@@ -175,7 +181,6 @@ def generar_pdf_presupuesto(empresa_nombre, empresa_contacto, cliente_nombre, cl
     story.append(Spacer(1, 15))
 
     story.append(Paragraph(f"<b>PRESUPUESTO DE SERVICIO TÉCNICO</b>", ParagraphStyle('Tit', fontSize=14, textColor=colors.HexColor("#333333"))))
-    story.append(Spacer(1, 10))
     story.append(Paragraph(f"<b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')}", style_body))
     story.append(Spacer(1, 10))
 
@@ -294,7 +299,16 @@ elif opcion == "➕ Registrar Nuevo Cliente / Equipo":
             if not nombre or not telefono or not direccion:
                 st.error("Por favor completa los campos obligatorios (*).")
             else:
-                nuevo_id = len(df_clientes) + 1
+                # Calcular un ID único incremental seguro
+                if not df_clientes.empty and "ID" in df_clientes.columns:
+                    try:
+                        ids_numericos = pd.to_numeric(df_clientes["ID"], errors='coerce').dropna()
+                        nuevo_id = int(ids_numericos.max()) + 1 if not ids_numericos.empty else len(df_clientes) + 1
+                    except Exception:
+                        nuevo_id = len(df_clientes) + 1
+                else:
+                    nuevo_id = 1
+
                 nueva_fila = {
                     "ID": str(nuevo_id),
                     "Nombre": str(nombre),
